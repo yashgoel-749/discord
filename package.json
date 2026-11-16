@@ -13,6 +13,7 @@
     "env:setup": "tsx scripts/setup-env.ts",
     "test:e2e": "playwright test",
     "test:integration": "tsx scripts/verify-connected.ts",
+    "test:voice": "tsx scripts/verify-voice.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

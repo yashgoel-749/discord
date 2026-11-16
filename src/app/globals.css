@@ -1546,6 +1546,80 @@ svg {
 .livekit-container > div {
   height: 100%;
 }
+.voice-conference {
+  height: 100%;
+}
+.voice-conference[hidden] {
+  display: none;
+}
+.livekit-container.voice-background {
+  flex: 0;
+  padding: 0;
+}
+.voice-call-bar {
+  position: fixed;
+  left: 86px;
+  bottom: 77px;
+  width: 220px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #b9f28338;
+  border-radius: 10px;
+  background: #171e1b;
+  box-shadow: 0 4px 20px #0004;
+  color: #b9f283;
+}
+.voice-call-return {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+.voice-call-return > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+.voice-call-return strong {
+  font-size: 11px;
+}
+.voice-call-return small {
+  font-size: 10px;
+  color: #a4b1a7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.voice-disconnect {
+  color: #f38b8b;
+}
+.has-voice-call .sidebar-scroll {
+  padding-bottom: 100px;
+}
+@media (max-width: 800px) {
+  .voice-call-bar {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+  .has-voice-call .conversation {
+    padding-bottom: 80px;
+  }
+  .has-voice-call .server-rail {
+    padding-bottom: 96px;
+  }
+  .has-voice-call .channel-sidebar {
+    padding-bottom: 80px;
+  }
+}
 .connection-error {
   background: #cdb66d14;
   border-bottom: 1px solid #cdb66d33;

@@ -13,6 +13,7 @@
 - Current-channel search within loaded messages.
 - Browser-session message bookmarks and channel mute preferences.
 - Optional LiveKit voice, camera video, and screen sharing.
+- Voice stays connected during channel, community, and DM navigation, with a persistent call bar.
 - Browser-local demo persistence and reset.
 
 ## Limits
@@ -28,6 +29,8 @@ Invites have no expiration or rotation UI. Treat them as access links. The curre
 Profile emails are returned only to the account owner. Direct messages are visible only to their participants.
 
 Voice admission tokens expire after ten minutes. Connected calls do not automatically end when a token expires. Membership removal and active-call revocation are not implemented.
+
+One voice call is active per tab. Browsing another voice channel does not join it. Explicitly switching calls, disconnecting, signing out, reloading, or closing the tab ends the current call.
 
 ## Not included
 

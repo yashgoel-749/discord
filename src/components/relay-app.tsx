@@ -32,6 +32,8 @@ import { WorkspaceDialog, type Modal } from "./workspace-dialogs";
 import { MessageList } from "./message-list";
 import { Composer } from "./composer";
 import { VoiceRoom } from "./voice-room";
+import { VoiceSession } from "./voice-session";
+import { useVoiceSession } from "./use-voice-session";
 
 function serverStyle(color: string): CSSProperties & { "--server-color": string } {
   return { "--server-color": color };
@@ -42,6 +44,7 @@ function bannerStyle(color: string): CSSProperties & { "--banner-color": string 
 
 export function RelayApp({ mode }: { mode: Mode }) {
   const relay = useRelay(mode);
+  const voice = useVoiceSession(mode);
   const [serverId, setServerId] = useState<string | null>(mode === "demo" ? "studio" : null);
   const [roomId, setRoomId] = useState(mode === "demo" ? "general" : "");
   const [modal, setModal] = useState<Modal | null>(null);
@@ -58,6 +61,9 @@ export function RelayApp({ mode }: { mode: Mode }) {
   const searchInput = useRef<HTMLInputElement>(null);
   const notify = useCallback((text: string) => setToast(text), []);
   const replyUsed = useCallback(() => setReply(""), []);
+  useEffect(() => {
+    if (relay.view.phase !== "ready") voice.leave();
+  }, [relay.view.phase, voice.leave]);
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 5000);
@@ -225,7 +231,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
   }
 
   return (
-    <div className="relay-shell">
+    <div className={`relay-shell ${voice.session ? "has-voice-call" : ""}`}>
       <nav className="server-rail" aria-label="Communities">
         <button
           className={`rail-home ${!server ? "selected" : ""}`}
@@ -580,9 +586,30 @@ export function RelayApp({ mode }: { mode: Mode }) {
                 <button onClick={() => void relay.refresh()}>Retry</button>
               </div>
             )}
+            <VoiceSession
+              session={voice.session}
+              visible={room?.id === voice.session?.room.id}
+              onReturn={() => {
+                if (!voice.session) return;
+                navigateServer(voice.session.room.serverId);
+                navigateRoom(voice.session.room);
+              }}
+              onLeave={voice.leave}
+              onEnded={voice.ended}
+              onError={notify}
+            />
             {room ? (
               room.kind === "voice" ? (
-                <VoiceRoom key={room.id} room={room} mode={mode} />
+                voice.session?.room.id !== room.id && (
+                  <VoiceRoom
+                    room={room}
+                    mode={mode}
+                    busy={voice.joiningRoomId !== null}
+                    error={voice.error}
+                    switching={voice.session !== null}
+                    onJoin={() => void voice.join(room, server?.name ?? "Community")}
+                  />
+                )
               ) : (
                 <>
                   <MessageList
@@ -725,6 +752,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
               .signOut()
               .then((result) => {
                 if (result.error) throw new Error(result.error.message ?? "Could not sign out");
+                voice.leave();
                 setModal(null);
                 void relay.refresh();
               })
