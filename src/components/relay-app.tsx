@@ -34,6 +34,7 @@ import { Composer } from "./composer";
 import { VoiceRoom } from "./voice-room";
 import { VoiceSession } from "./voice-session";
 import { useVoiceSession } from "./use-voice-session";
+import { useVoicePresence, VoiceMembers } from "./voice-members";
 
 function serverStyle(color: string): CSSProperties & { "--server-color": string } {
   return { "--server-color": color };
@@ -47,6 +48,11 @@ export function RelayApp({ mode }: { mode: Mode }) {
   const voice = useVoiceSession(mode);
   const [serverId, setServerId] = useState<string | null>(mode === "demo" ? "studio" : null);
   const [roomId, setRoomId] = useState(mode === "demo" ? "general" : "");
+  const voicePresence = useVoicePresence({
+    mode,
+    viewerId: relay.view.phase === "ready" ? relay.view.state.me.id : null,
+    serverId,
+  });
   const [modal, setModal] = useState<Modal | null>(null);
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState("");
@@ -186,16 +192,27 @@ export function RelayApp({ mode }: { mode: Mode }) {
     }
   }
   function renderChannel(channel: Room) {
+    const presence = voicePresence(channel.id);
     return (
-      <button
-        key={channel.id}
-        className={`channel-item ${room?.id === channel.id ? "selected" : ""}`}
-        onClick={() => navigateRoom(channel)}
-      >
-        {channel.kind === "voice" ? <Volume2 size={19} /> : <Hash size={19} />}
-        <span>{channel.name}</span>
-        {channel.id === room?.id && <span className="channel-active-dot" />}
-      </button>
+      <div key={channel.id}>
+        <button
+          aria-label={channel.name}
+          className={`channel-item ${room?.id === channel.id ? "selected" : ""}`}
+          onClick={() => navigateRoom(channel)}
+        >
+          {channel.kind === "voice" ? <Volume2 size={19} /> : <Hash size={19} />}
+          <span>{channel.name}</span>
+          {channel.kind === "voice" && presence.phase === "ready" && (
+            <span className="voice-member-count" aria-hidden="true">
+              {presence.members.length}
+            </span>
+          )}
+          {channel.id === room?.id && <span className="channel-active-dot" />}
+        </button>
+        {channel.kind === "voice" && (
+          <VoiceMembers channelName={channel.name} presence={presence} />
+        )}
+      </div>
     );
   }
   function renderMember(user: User) {

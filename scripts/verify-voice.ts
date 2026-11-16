@@ -10,6 +10,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { RoomServiceClient } from "livekit-server-sdk";
 import { stateSchema, type Command } from "../src/lib/model";
+import { voicePresenceSchema } from "../src/lib/voice-presence";
 
 nextEnv.loadEnvConfig(process.cwd());
 const { LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET } = process.env;
@@ -122,10 +123,13 @@ try {
   });
   const alice = await browser.newContext({ permissions: ["microphone", "camera"] });
   const bob = await browser.newContext({ permissions: ["microphone", "camera"] });
+  const observer = await browser.newContext();
   await monitorAudio(alice);
   await monitorAudio(bob);
+  await monitorAudio(observer);
   const aliceUser = await register(alice, "Voice Alice");
   const bobUser = await register(bob, "Voice Bob");
+  await register(observer, "Voice Observer");
   let state = await command(alice, {
     type: "createServer",
     name: "Voice Builders",
@@ -133,7 +137,16 @@ try {
   });
   const community = state.servers.find((item) => item.name === "Voice Builders");
   assert.ok(community);
+  const denied = await observer.request.get(`${origin}/api/voice?serverId=${community.id}`);
+  assert.equal(denied.status(), 403, "Nonmembers must not see voice occupants");
+  const anonymous = await browser.newContext();
+  assert.equal(
+    (await anonymous.request.get(`${origin}/api/voice?serverId=${community.id}`)).status(),
+    401,
+  );
+  await anonymous.close();
   await command(bob, { type: "join", inviteCode: community.inviteCode });
+  await command(observer, { type: "join", inviteCode: community.inviteCode });
   state = await command(alice, {
     type: "createRoom",
     serverId: community.id,
@@ -174,6 +187,47 @@ try {
     .poll(async () => (await service.listParticipants(livekitRoom)).length, pollOptions)
     .toBe(2);
   const originalSid = (await service.getParticipant(livekitRoom, aliceUser.id)).sid;
+  assert.equal((await service.getParticipant(livekitRoom, aliceUser.id)).name, "Voice Alice");
+  assert.equal((await service.getParticipant(livekitRoom, bobUser.id)).name, "Voice Bob");
+  const watching = await observer.newPage();
+  await watching.goto(origin);
+  await watching
+    .getByRole("navigation", { name: "Communities" })
+    .getByRole("button", { name: "Voice Builders", exact: true })
+    .click();
+  const roster = watching.getByRole("list", { name: "stay-connected participants", exact: true });
+  await expect(roster.getByText("Voice Alice", { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(roster.getByText("Voice Bob", { exact: true })).toBeVisible();
+  await expect(watching.getByRole("region", { name: "Active voice call" })).toHaveCount(0);
+  assert.equal(
+    await watching.evaluate(() => {
+      const connections: unknown = Reflect.get(window, "relayTestConnections");
+      return Array.isArray(connections) ? connections.length : -1;
+    }),
+    0,
+    "Reading members must not join a call",
+  );
+  const observed = await observer.request.get(`${origin}/api/voice?serverId=${community.id}`);
+  assert.equal(observed.status(), 200);
+  const directory = voicePresenceSchema.parse(await observed.json());
+  assert.deepEqual(Object.keys(directory.channels).sort(), [voice.id, otherVoice.id].sort());
+  assert.deepEqual(directory.channels[otherVoice.id], { phase: "ready", members: [] });
+  assert.equal(observed.headers()["cache-control"], "private, no-store");
+  await mkdir("test-results", { recursive: true });
+  await watching.screenshot({ path: "test-results/voice-member-roster.png" });
+  await watching.route("**/api/voice?serverId=*", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Presence temporarily unavailable" }),
+    }),
+  );
+  await expect(
+    watching.getByText("Voice members unavailable", { exact: true }).first(),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(roster).toHaveCount(0);
+  await watching.unroute("**/api/voice?serverId=*");
+  await expect(roster.getByText("Voice Alice", { exact: true })).toBeVisible({ timeout: 15000 });
   await expect.poll(() => receivedAudio(a), pollOptions).toBeGreaterThan(0);
   await expect.poll(() => receivedAudio(b), pollOptions).toBeGreaterThan(0);
 
@@ -209,6 +263,12 @@ try {
   await stillConnected();
   await a.getByRole("button", { name: "Mute microphone", exact: true }).click();
   await expect(a.getByRole("button", { name: "Unmute microphone", exact: true })).toBeVisible();
+  await expect(
+    roster
+      .getByRole("listitem")
+      .filter({ hasText: "Voice Alice" })
+      .getByRole("img", { name: "Microphone muted", exact: true }),
+  ).toBeVisible({ timeout: 15000 });
   await expect
     .poll(
       async () =>
@@ -217,6 +277,12 @@ try {
     )
     .toBe(true);
   await a.getByRole("button", { name: "Unmute microphone", exact: true }).click();
+  await expect(
+    roster
+      .getByRole("listitem")
+      .filter({ hasText: "Voice Alice" })
+      .getByRole("img", { name: "Microphone on", exact: true }),
+  ).toBeVisible({ timeout: 15000 });
   await stillConnected();
   await a.setViewportSize({ width: 390, height: 844 });
   await stillConnected();
@@ -245,6 +311,14 @@ try {
       pollOptions,
     )
     .toEqual([bobUser.id]);
+  await expect(roster.getByText("Voice Alice", { exact: true })).toHaveCount(0, { timeout: 15000 });
+  const switchedRoster = watching.getByRole("list", {
+    name: "other-call participants",
+    exact: true,
+  });
+  await expect(switchedRoster.getByText("Voice Alice", { exact: true })).toBeVisible({
+    timeout: 15000,
+  });
   await a.getByRole("button", { name: "Disconnect voice", exact: true }).click();
   await expect(a.getByRole("region", { name: "Active voice call" })).toHaveCount(0);
   await expect
@@ -254,13 +328,15 @@ try {
     )
     .toBe(0);
   await b.getByRole("button", { name: "Your settings", exact: true }).click();
+  await expect(switchedRoster).toHaveCount(0, { timeout: 15000 });
   await b.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(b.getByRole("region", { name: "Active voice call" })).toHaveCount(0);
   await expect
     .poll(async () => (await service.listParticipants(livekitRoom)).length, pollOptions)
     .toBe(0);
+  await expect(roster).toHaveCount(0, { timeout: 15000 });
   process.stdout.write(
-    "Voice checks passed: real two-browser audio, unchanged participant session through chat/community/DM navigation, background mute, mobile call bar, return, explicit channel switch, disconnect, and sign-out.\n",
+    "Voice checks passed: real two-browser audio, persistent calls through navigation, named participants, spectator rosters, membership privacy, mute updates, joins/leaves/channel switches, mobile controls, disconnect, and sign-out.\n",
   );
 } finally {
   const cleanup = await Promise.allSettled([

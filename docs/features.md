@@ -14,6 +14,7 @@
 - Browser-session message bookmarks and channel mute preferences.
 - Optional LiveKit voice, camera video, and screen sharing.
 - Voice stays connected during channel, community, and DM navigation, with a persistent call bar.
+- Live voice-channel member lists with names, avatars, counts, and microphone state.
 - Browser-local demo persistence and reset.
 
 ## Limits
@@ -31,6 +32,8 @@ Profile emails are returned only to the account owner. Direct messages are visib
 Voice admission tokens expire after ten minutes. Connected calls do not automatically end when a token expires. Membership removal and active-call revocation are not implemented.
 
 One voice call is active per tab. Browsing another voice channel does not join it. Explicitly switching calls, disconnecting, signing out, reloading, or closing the tab ends the current call.
+
+Voice member lists are visible to community members even outside a call. Lists refresh about every three seconds plus service latency and show microphone state, not who is speaking. They use LiveKit's current room membership, not profile availability. Failed presence reads show an unavailable message rather than stale members or a false empty room.
 
 ## Not included
 

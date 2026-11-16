@@ -4,27 +4,28 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { User } from "@/lib/model";
 
-export function Avatar({
-  user,
-  size = "normal",
-  showStatus = true,
-}: {
-  user: User;
-  size?: "small" | "normal" | "large";
-  showStatus?: boolean;
-}) {
+export function Avatar(
+  props: {
+    size?: "small" | "normal" | "large";
+  } & (
+    | { user: User; showStatus?: true }
+    | { user: Pick<User, "id" | "name" | "color">; showStatus: false }
+  ),
+) {
+  const { user, size = "normal" } = props;
+  const status = props.showStatus === false ? null : props.user.status;
   return (
     <span
       className={`avatar avatar-${size}`}
       style={{ backgroundColor: user.color }}
-      aria-label={`${user.name}, ${user.status}`}
+      aria-label={status ? `${user.name}, ${status}` : user.name}
     >
       {user.name
         .split(" ")
         .map((part) => part[0])
         .slice(0, 2)
         .join("")}
-      {showStatus && <span className={`status-dot status-${user.status}`} />}
+      {status && <span className={`status-dot status-${status}`} />}
     </span>
   );
 }

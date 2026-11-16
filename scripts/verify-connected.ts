@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { stateSchema, type AppState, type Command } from "../src/lib/model";
+import { voicePresenceSchema } from "../src/lib/voice-presence";
 
 const origin = "http://localhost:3100";
 const db = await PGlite.create();
@@ -99,6 +100,7 @@ async function command(cookie: string, input: Command) {
 try {
   await ready();
   assert.equal((await api("/api/relay")).status, 401);
+  assert.equal((await api("/api/voice?serverId=missing")).status, 401);
   assert.equal(
     (await api("/api/auth/sign-up/email", "", { padding: "x".repeat(21000) })).status,
     413,
@@ -228,6 +230,12 @@ try {
   });
   const voice = state.rooms.find((r) => r.name === "voice-lounge");
   assert.ok(voice);
+  assert.equal((await api(`/api/voice?serverId=${community.id}`, outsider.cookie)).status, 403);
+  const presenceResponse = await api(`/api/voice?serverId=${community.id}`, bob.cookie);
+  assert.equal(presenceResponse.status, 200);
+  const presence = voicePresenceSchema.parse(await presenceResponse.json());
+  assert.deepEqual(presence.channels, { [voice.id]: { phase: "unavailable" } });
+  assert.equal(presenceResponse.headers.get("cache-control"), "private, no-store");
   assert.equal((await api("/api/voice", outsider.cookie, { roomId: voice.id })).status, 403);
   assert.equal((await api("/api/voice", bob.cookie, { roomId: voice.id })).status, 503);
   state = await command(bob.cookie, {

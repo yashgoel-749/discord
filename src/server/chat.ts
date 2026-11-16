@@ -207,9 +207,10 @@ export async function execute(userId: string, command: Command) {
 
 export async function voiceAdmission(userId: string, roomId: string) {
   const result = await database().query(
-    `SELECT r.id FROM rooms r WHERE r.id=$2 AND r.kind='voice' AND ${access}`,
+    `SELECT u.name FROM rooms r JOIN "user" u ON u.id=$1 WHERE r.id=$2 AND r.kind='voice' AND ${access}`,
     [userId, roomId],
   );
   if (!result.rowCount) throw new HttpError(403, "You cannot join this voice channel");
   await limitCommands(userId);
+  return z.object({ name: userSchema.shape.name }).parse(result.rows[0]).name;
 }

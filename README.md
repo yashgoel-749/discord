@@ -53,6 +53,8 @@ Use HTTPS on a deployed app. Browsers require a secure context for microphone, c
 
 Calls stay connected while you browse text channels, direct messages, and other communities. Use the call bar to mute, return to the call, or disconnect. Browsing another voice channel does not switch your call until you select **Switch voice channel**. Reloading, closing the tab, or signing out ends the call.
 
+Each voice channel lists its connected members, avatars, and microphone state. Community members can see the list without joining a call. Lists refresh about every three seconds plus service latency.
+
 ## Verify changes
 
 ```sh
@@ -66,7 +68,7 @@ npm run test:integration
 
 The connected integration check requires the production build. It starts an in-memory PostgreSQL-compatible database and a separate Next.js server, then checks real authentication and chat HTTP requests. It needs no Neon credentials. It does not prove Neon deployment behavior or LiveKit media connectivity.
 
-With valid LiveKit credentials in `.env.local`, run `npm run test:voice` after the production build. This check uses two Chromium sessions with synthetic microphones and a temporary database. It verifies audio reception, call persistence during navigation, mute, channel switching, disconnect, and sign-out. It removes its temporary LiveKit rooms and does not change Neon data.
+With valid LiveKit credentials in `.env.local`, run `npm run test:voice` after the production build. This check uses two Chromium sessions with synthetic microphones, a third observer, and a temporary database. It verifies audio reception, call persistence, named member lists, spectator access, membership privacy, mute, channel switching, disconnect, and sign-out. It removes its temporary LiveKit rooms and does not change Neon data.
 
 ## Deploy
 
