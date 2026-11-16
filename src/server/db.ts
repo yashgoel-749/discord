@@ -10,7 +10,7 @@ export function database() {
   globalThis.relayPool ??= new pg.Pool({
     connectionString: process.env.DATABASE_URL,
     max: 5,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 30000,
     idleTimeoutMillis: 20000,
   });
   return globalThis.relayPool;
