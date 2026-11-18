@@ -14,7 +14,7 @@ export async function readVoicePresence({
 }): Promise<VoicePresence> {
   const db = database();
   const result = await db.query(
-    `SELECT u.id,u.name,u.color FROM "user" u JOIN memberships m ON m.user_id=u.id WHERE m.server_id=$1`,
+    `SELECT u.id,u.name,u.username,u.color FROM "user" u JOIN memberships m ON m.user_id=u.id WHERE m.server_id=$1`,
     [serverId],
   );
   const profiles = z.array(voiceMemberSchema.omit({ microphone: true })).parse(result.rows);

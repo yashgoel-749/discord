@@ -1,5 +1,7 @@
 import "server-only";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+import { usernameSchema } from "@/lib/model";
 import { database } from "./db";
 
 function makeAuth() {
@@ -24,12 +26,28 @@ function makeAuth() {
     },
     user: {
       additionalFields: {
+        username: {
+          type: "string",
+          required: true,
+          input: true,
+          validator: { input: usernameSchema },
+        },
         color: { type: "string", defaultValue: "#a78bfa", input: false },
         status: { type: "string", defaultValue: "online", input: false },
         bio: { type: "string", defaultValue: "", input: false },
       },
     },
     session: { expiresIn: 60 * 60 * 24 * 7 },
+    databaseHooks: {
+      user: {
+        update: {
+          before: async (user) => {
+            if ("username" in user)
+              throw new APIError("BAD_REQUEST", { message: "Change your username in Settings" });
+          },
+        },
+      },
+    },
   });
 }
 

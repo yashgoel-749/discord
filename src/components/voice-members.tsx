@@ -96,7 +96,8 @@ export function VoiceMembers({
         <li key={member.id}>
           <Avatar user={member} size="small" showStatus={false} />
           <span className="voice-member-name" title={member.name}>
-            {member.name}
+            <span>{member.name}</span>
+            <small className="public-username">@{member.username}</small>
           </span>
           {member.microphone === "muted" ? (
             <MicOff

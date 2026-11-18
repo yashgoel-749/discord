@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { createDemo, applyDemoCommand } from "@/lib/demo";
+import { createDemo, applyDemoCommand, restoreDemo } from "@/lib/demo";
 import { type AppState, type Command, stateSchema } from "@/lib/model";
+import { RequestOrder } from "@/lib/request-order";
 
 export type Mode = "demo" | "connected";
 type View = { phase: "loading" } | { phase: "signedOut" } | { phase: "ready"; state: AppState };
@@ -22,7 +23,8 @@ export function useRelay(mode: Mode) {
   const [busy, setBusy] = useState(false);
   const current = useRef<AppState | null>(null);
   const inFlight = useRef(false);
-  const generation = useRef(0);
+  const order = useRef(new RequestOrder());
+  const readRequest = useRef<AbortController | null>(null);
 
   const accept = useCallback((state: AppState) => {
     current.current = state;
@@ -30,22 +32,31 @@ export function useRelay(mode: Mode) {
   }, []);
   const refresh = useCallback(async () => {
     if (mode === "demo" || inFlight.current) return;
-    const requestGeneration = generation.current;
+    const ticket = order.current.begin();
+    readRequest.current?.abort();
+    const controller = new AbortController();
+    readRequest.current = controller;
     try {
-      const response = await fetch("/api/relay", { cache: "no-store" });
-      if (requestGeneration !== generation.current) return;
+      const response = await fetch("/api/relay", {
+        cache: "no-store",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
+      });
+      if (!order.current.isCurrent(ticket)) return;
       if (response.status === 401) {
         current.current = null;
         setView({ phase: "signedOut" });
         return;
       }
       const state = stateSchema.parse(await responseData(response));
-      if (requestGeneration === generation.current) {
+      if (order.current.isCurrent(ticket)) {
         accept(state);
         setError("");
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not refresh chat");
+      if (order.current.isCurrent(ticket) && !controller.signal.aborted)
+        setError(cause instanceof Error ? cause.message : "Could not refresh chat");
+    } finally {
+      if (readRequest.current === controller) readRequest.current = null;
     }
   }, [accept, mode]);
 
@@ -53,7 +64,7 @@ export function useRelay(mode: Mode) {
     if (mode === "demo") {
       try {
         const raw = localStorage.getItem(storageKey);
-        accept(raw ? stateSchema.parse(JSON.parse(raw)) : createDemo());
+        accept(raw ? restoreDemo(JSON.parse(raw)) : createDemo());
       } catch {
         accept(createDemo());
         setError("Could not restore the demo. A fresh workspace is ready.");
@@ -61,8 +72,7 @@ export function useRelay(mode: Mode) {
       const onStorage = (event: StorageEvent) => {
         if (event.key !== storageKey || !event.newValue) return;
         try {
-          const parsed = stateSchema.safeParse(JSON.parse(event.newValue));
-          if (parsed.success) accept(parsed.data);
+          accept(restoreDemo(JSON.parse(event.newValue)));
         } catch {
           setError(
             "Another tab wrote an invalid demo snapshot. Your current workspace is unchanged.",
@@ -74,9 +84,13 @@ export function useRelay(mode: Mode) {
     }
     void refresh();
     const timer = window.setInterval(() => {
-      if (!document.hidden) void refresh();
+      if (!document.hidden && !readRequest.current) void refresh();
     }, 3000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      order.current.invalidate();
+      readRequest.current?.abort();
+    };
   }, [accept, mode, refresh]);
 
   const dispatch = useCallback(
@@ -84,7 +98,8 @@ export function useRelay(mode: Mode) {
       if (inFlight.current || !current.current)
         throw new Error("Please wait for the previous action to finish");
       inFlight.current = true;
-      generation.current += 1;
+      order.current.invalidate();
+      readRequest.current?.abort();
       setBusy(true);
       try {
         let next: AppState;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { userSchema } from "./model";
 
 export const voiceMemberSchema = userSchema
-  .pick({ id: true, name: true, color: true })
+  .pick({ id: true, name: true, username: true, color: true })
   .extend({ microphone: z.enum(["live", "muted"]) })
   .strict();
 export const voiceChannelPresenceSchema = z.discriminatedUnion("phase", [

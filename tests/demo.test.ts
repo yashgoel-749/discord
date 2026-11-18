@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDemo, applyDemoCommand } from "../src/lib/demo";
+import { createDemo, applyDemoCommand, restoreDemo } from "../src/lib/demo";
 import { commandSchema, stateSchema, authSchema } from "../src/lib/model";
 
 test("demo starts with validated communities, private conversations, and text history", () => {
@@ -10,6 +10,27 @@ test("demo starts with validated communities, private conversations, and text hi
   assert.equal(state.rooms.find((r) => r.id === "dm-mia")?.kind, "dm");
   assert.ok(state.messages.some((m) => m.roomId === "general"));
   assert.ok(!("email" in state.users[1]));
+});
+test("older local demos retain their messages and communities when usernames are introduced", () => {
+  const state = applyDemoCommand(createDemo(), {
+    type: "send",
+    roomId: "general",
+    content: "Keep my work",
+  });
+  const { username, usernameChangedAt, friendRequestPrivacy, ...me } = state.me;
+  const legacy = {
+    ...state,
+    me,
+    users: state.users.map(({ username, ...user }) => user),
+    friends: undefined,
+    incoming: undefined,
+    outgoing: undefined,
+    blocked: undefined,
+  };
+  const restored = restoreDemo(legacy);
+  assert.ok(restored.messages.some((message) => message.content === "Keep my work"));
+  assert.deepEqual(restored.servers, state.servers);
+  assert.equal(restored.me.username, "alex.morgan");
 });
 
 test("messages are trimmed, attributed to the current user, editable and deletable", () => {
@@ -82,6 +103,23 @@ test("DM creation reuses an existing two-person conversation", () => {
   assert.deepEqual(rooms[0].participantIds, ["you", "james"]);
   assert.throws(() => applyDemoCommand(once, { type: "dm", userId: "you" }));
 });
+test("demo blocks prevent DMs without destroying local message history", () => {
+  const initial = createDemo();
+  const blocked = applyDemoCommand(initial, { type: "block", userId: "mia" });
+  assert.deepEqual(blocked.messages, initial.messages);
+  assert.throws(
+    () => applyDemoCommand(blocked, { type: "send", roomId: "dm-mia", content: "Blocked" }),
+    /cannot contact/,
+  );
+  const unblocked = applyDemoCommand(blocked, { type: "unblock", userId: "mia" });
+  assert.ok(
+    applyDemoCommand(unblocked, {
+      type: "send",
+      roomId: "dm-mia",
+      content: "Allowed again",
+    }).messages.some((message) => message.content === "Allowed again"),
+  );
+});
 
 test("profile updates remain consistent with author rendering", () => {
   const state = applyDemoCommand(createDemo(), {
@@ -144,6 +182,7 @@ test("account boundary validates email, display name, and password strength", ()
       email: "TEST@example.com",
       password: "long-password",
       name: "Tester",
+      username: "tester",
     }).email,
     "test@example.com",
   );

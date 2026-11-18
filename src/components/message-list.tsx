@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Message, Room, User } from "@/lib/model";
 import { Avatar } from "./primitives";
+import { mentionParts } from "@/lib/mentions";
 
 type Props = {
   messages: Message[];
@@ -57,7 +58,10 @@ export function MessageList({
         users
           .find((u) => u.id === m.authorId)
           ?.name.toLowerCase()
-          .includes(search.toLowerCase())),
+          .includes(search.toLowerCase()) ||
+        users
+          .find((u) => u.id === m.authorId)
+          ?.username.includes(search.toLowerCase().replace(/^@/, ""))),
   );
   useEffect(() => {
     const element = list.current;
@@ -159,6 +163,7 @@ export function MessageList({
                   <header>
                     <button className="author-name" onClick={() => onUser(author)}>
                       {author.name}
+                      <small className="public-username">@{author.username}</small>
                     </button>
                     {author.id === me.id && <span className="you-label">YOU</span>}
                     <time dateTime={message.createdAt}>
@@ -167,7 +172,19 @@ export function MessageList({
                   </header>
                 )}
                 <p>
-                  {message.content}
+                  {mentionParts(message.content, users).map((part, index) =>
+                    part.kind === "text" ? (
+                      part.text
+                    ) : (
+                      <button
+                        className="message-mention"
+                        key={`${part.user.id}-${index}`}
+                        onClick={() => onUser(part.user)}
+                      >
+                        @{part.user.username}
+                      </button>
+                    ),
+                  )}
                   {message.edited && <small className="edited-label"> (edited)</small>}
                 </p>
                 {message.id === "m4" && (

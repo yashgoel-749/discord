@@ -19,7 +19,9 @@ Try these actions:
 - Create a community with the **+** button in the left rail.
 - Create a channel, then send a message there.
 - Hover over your message to edit, delete, react, or save it.
-- Open a member's profile and select **Say hello** to start a direct message.
+- Open a member's profile and select **Message** to start a direct message.
+- Open **Your people** to manage friends, requests, and blocked people.
+- Change your public username and friend-request privacy in **Settings**.
 - Search the current conversation with **Ctrl+K** or **Cmd+K**.
 
 See [the feature reference](docs/features.md) for limits and unsupported features.
@@ -64,9 +66,10 @@ npm run build
 npx playwright install chromium
 npm run test:e2e
 npm run test:integration
+npm run format:check
 ```
 
-The connected integration check requires the production build. It starts an in-memory PostgreSQL-compatible database and a separate Next.js server, then checks real authentication and chat HTTP requests. It needs no Neon credentials. It does not prove Neon deployment behavior or LiveKit media connectivity.
+The connected integration check requires the production build and Chromium. It starts an in-memory PostgreSQL-compatible database and a separate Next.js server. It checks authentication, chat, usernames, friendships, privacy, and browser interactions, including delayed polling. It needs no Neon credentials. It does not prove Neon deployment behavior or LiveKit media connectivity.
 
 With valid LiveKit credentials in `.env.local`, run `npm run test:voice` after the production build. This check uses two Chromium sessions with synthetic microphones, a third observer, and a temporary database. It verifies audio reception, call persistence, named member lists, spectator access, membership privacy, mute, channel switching, disconnect, and sign-out. It removes its temporary LiveKit rooms and does not change Neon data.
 
@@ -80,5 +83,7 @@ With valid LiveKit credentials in `.env.local`, run `npm run test:voice` after t
 6. Build with `npm run build` and start with `npm start` on a Node.js host.
 
 Use a separate Neon branch for previews. Set each preview's `APP_URL` to its own origin.
+
+When upgrading an existing deployment, coordinate `db/002_usernames_friends.sql` with this release. The migration backfills public usernames and makes `username` required. The previous signup code cannot create users after that migration. Pause registration during the migration and deployment, then reopen it after verifying the new signup flow.
 
 Read [the launch checklist](docs/launch-checklist.md) before opening registration to the public. This is a working first release, not full Discord feature parity.

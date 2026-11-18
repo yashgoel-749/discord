@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/demo.test.ts",
+    "test": "tsx --test tests/demo.test.ts tests/usernames.test.ts tests/migration.test.ts tests/friendships.test.ts tests/polling.test.ts tests/mentions.test.ts tests/pglite-protocol.test.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "env:setup": "tsx scripts/setup-env.ts",
     "test:e2e": "playwright test",

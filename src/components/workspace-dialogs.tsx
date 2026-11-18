@@ -10,9 +10,11 @@ import {
   type Server,
   type User,
   userSchema,
+  friendPrivacySchema,
 } from "@/lib/model";
 import { Avatar, Dialog } from "./primitives";
 import type { Mode } from "./use-relay";
+import { UsernameField } from "./username-field";
 
 export type Modal =
   | { kind: "createServer" }
@@ -108,8 +110,20 @@ export function WorkspaceDialog(props: Props) {
           setError("Choose a valid status");
           return;
         }
+        const privacy = friendPrivacySchema.safeParse(value("friendRequestPrivacy"));
+        if (!privacy.success) {
+          setError("Choose a valid privacy setting");
+          return;
+        }
         return perform(
-          { type: "profile", name: value("name"), bio: value("bio"), status: status.data },
+          {
+            type: "profile",
+            name: value("name"),
+            username: value("username"),
+            friendRequestPrivacy: privacy.data,
+            bio: value("bio"),
+            status: status.data,
+          },
           () => notify("Profile updated. Looking good."),
         );
       }
@@ -274,21 +288,72 @@ export function WorkspaceDialog(props: Props) {
         </Dialog>
       );
     }
-    case "profile":
+    case "profile": {
+      const user = state.users.find((person) => person.id === modal.user.id) ?? modal.user;
+      const friend = state.friends.some((item) => item.userId === user.id);
+      const pending = [...state.incoming, ...state.outgoing].some(
+        (item) => item.userId === user.id,
+      );
+      const blocked = state.blocked.some((item) => item.userId === user.id);
+      const canMessage =
+        friend || state.servers.some((server) => server.memberIds.includes(user.id));
       return (
         <Dialog title="A face in the community." onClose={onClose}>
-          <div className="profile-banner" style={{ background: modal.user.color }} />
+          <div className="profile-banner" style={{ background: user.color }} />
           <div className="profile-detail">
-            <Avatar user={modal.user} size="large" />
-            <h2>{modal.user.name}</h2>
+            <Avatar user={user} size="large" />
+            <h2>{user.name}</h2>
+            <p className="public-username">@{user.username}</p>
             <span className="profile-status">
-              {modal.user.status === "dnd" ? "Do not disturb" : modal.user.status}
+              {user.status === "dnd" ? "Do not disturb" : user.status}
             </span>
             <div className="profile-bio">
               <span className="eyebrow">A LITTLE ABOUT ME</span>
-              <p>{modal.user.bio || "A story still being written."}</p>
+              <p>{user.bio || "A story still being written."}</p>
             </div>
             {modal.user.id !== state.me.id && (
+              <div className="profile-relationship">
+                {blocked ? (
+                  <button
+                    className="secondary-button"
+                    disabled={busy}
+                    onClick={() => void perform({ type: "unblock", userId: user.id })}
+                  >
+                    Unblock
+                  </button>
+                ) : friend ? (
+                  <button
+                    className="text-button danger"
+                    disabled={busy}
+                    onClick={() => void perform({ type: "friendRemove", userId: user.id })}
+                  >
+                    Remove Friend
+                  </button>
+                ) : pending ? (
+                  <button className="secondary-button" disabled>
+                    Pending
+                  </button>
+                ) : (
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    onClick={() => void perform({ type: "friendRequest", username: user.username })}
+                  >
+                    Add Friend
+                  </button>
+                )}
+                {!blocked && (
+                  <button
+                    className="text-button danger"
+                    disabled={busy}
+                    onClick={() => void perform({ type: "block", userId: user.id })}
+                  >
+                    Block
+                  </button>
+                )}
+              </div>
+            )}
+            {modal.user.id !== state.me.id && !blocked && canMessage && (
               <button
                 className="primary-button"
                 disabled={busy}
@@ -301,7 +366,7 @@ export function WorkspaceDialog(props: Props) {
                   })
                 }
               >
-                Say hello
+                Message
                 <ArrowRight size={18} />
               </button>
             )}
@@ -309,6 +374,7 @@ export function WorkspaceDialog(props: Props) {
           </div>
         </Dialog>
       );
+    }
     case "settings":
       return (
         <Dialog title="Make yourself at home." onClose={onClose}>
@@ -333,6 +399,16 @@ export function WorkspaceDialog(props: Props) {
             <label>
               About you
               <textarea name="bio" defaultValue={state.me.bio} maxLength={200} rows={3} />
+            </label>
+            <UsernameField state={state} mode={mode} />
+            <h3>Privacy</h3>
+            <label>
+              Who can send me friend requests
+              <select name="friendRequestPrivacy" defaultValue={state.me.friendRequestPrivacy}>
+                <option value="everyone">Everyone</option>
+                <option value="communities">Members of my communities</option>
+                <option value="no_one">No one</option>
+              </select>
             </label>
             <label>
               Availability

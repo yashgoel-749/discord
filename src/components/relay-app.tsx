@@ -35,6 +35,7 @@ import { VoiceRoom } from "./voice-room";
 import { VoiceSession } from "./voice-session";
 import { useVoiceSession } from "./use-voice-session";
 import { useVoicePresence, VoiceMembers } from "./voice-members";
+import { PeopleScreen } from "./people-screen";
 
 function serverStyle(color: string): CSSProperties & { "--server-color": string } {
   return { "--server-color": color };
@@ -48,6 +49,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
   const voice = useVoiceSession(mode);
   const [serverId, setServerId] = useState<string | null>(mode === "demo" ? "studio" : null);
   const [roomId, setRoomId] = useState(mode === "demo" ? "general" : "");
+  const [peopleOpen, setPeopleOpen] = useState(mode === "connected");
   const voicePresence = useVoicePresence({
     mode,
     viewerId: relay.view.phase === "ready" ? relay.view.state.me.id : null,
@@ -66,6 +68,27 @@ export function RelayApp({ mode }: { mode: Mode }) {
   const inviteHandled = useRef(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const notify = useCallback((text: string) => setToast(text), []);
+  const incomingSeen = useRef<{ userId: string; ids: Set<string> } | null>(null);
+  useEffect(() => {
+    if (relay.view.phase !== "ready") {
+      incomingSeen.current = null;
+      return;
+    }
+    const { state } = relay.view;
+    if (incomingSeen.current?.userId === state.me.id) {
+      const fresh = state.incoming.filter((request) => !incomingSeen.current?.ids.has(request.id));
+      if (fresh.length)
+        notify(
+          fresh.length === 1
+            ? `New friend request from @${state.users.find((user) => user.id === fresh[0].userId)?.username ?? "someone"}`
+            : `${fresh.length} new friend requests`,
+        );
+    }
+    incomingSeen.current = {
+      userId: state.me.id,
+      ids: new Set(state.incoming.map((request) => request.id)),
+    };
+  }, [relay.view, notify]);
   const replyUsed = useCallback(() => setReply(""), []);
   useEffect(() => {
     if (relay.view.phase !== "ready") voice.leave();
@@ -114,6 +137,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
   }, [relay.view.phase, relay.dispatch, notify]);
 
   function navigateServer(id: string | null) {
+    setPeopleOpen(id === null);
     setServerId(id);
     setRoomId("");
     setSearch("");
@@ -121,6 +145,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
     setSidebarOpen(false);
   }
   function navigateRoom(room: Room) {
+    setPeopleOpen(false);
     setRoomId(room.id);
     setSearch("");
     setSavedOnly(false);
@@ -128,6 +153,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
   }
   function navigateDM(id: string) {
     navigateServer(null);
+    setPeopleOpen(false);
     setRoomId(id);
   }
 
@@ -148,11 +174,22 @@ export function RelayApp({ mode }: { mode: Mode }) {
 
   const state = relay.view.state;
   const server = state.servers.find((s) => s.id === serverId);
-  const rooms = state.rooms.filter((r) => (server ? r.serverId === server.id : r.kind === "dm"));
+  const rooms = state.rooms.filter(
+    (r) =>
+      (server ? r.serverId === server.id : r.kind === "dm") &&
+      (r.kind !== "dm" ||
+        !r.participantIds.some((id) => state.blocked.some((person) => person.userId === id))),
+  );
   const room =
     rooms.find((r) => r.id === roomId) ?? rooms.find((r) => r.kind !== "voice") ?? rooms[0];
-  const roomMessages = state.messages.filter((m) => m.roomId === room?.id);
-  const dms = state.rooms.filter((r) => r.kind === "dm");
+  const roomMessages = state.messages.filter(
+    (m) => m.roomId === room?.id && !state.blocked.some((person) => person.userId === m.authorId),
+  );
+  const dms = state.rooms.filter(
+    (r) =>
+      r.kind === "dm" &&
+      !r.participantIds.some((id) => state.blocked.some((person) => person.userId === id)),
+  );
   const members = server
     ? state.users.filter((u) => server.memberIds.includes(u.id))
     : state.users.filter((u) => room?.participantIds.includes(u.id));
@@ -228,6 +265,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
             {user.name}
             {user.id === state.me.id && <small> you</small>}
           </strong>
+          <small className="public-username">@{user.username}</small>
           <small>
             {user.status === "dnd"
               ? "In the zone"
@@ -244,6 +282,31 @@ export function RelayApp({ mode }: { mode: Mode }) {
           </span>
         )}
       </button>
+    );
+  }
+  function renderDMPerson(user: User) {
+    const dm = dms.find((conversation) => conversation.participantIds.includes(user.id));
+    return (
+      <div
+        className={`dm-person-row ${!peopleOpen && room?.id === dm?.id ? "selected" : ""}`}
+        key={user.id}
+      >
+        <button className="dm-item" onClick={() => setModal({ kind: "profile", user })}>
+          <Avatar user={user} size="small" />
+          <span>
+            {user.name}
+            <small className="public-username">@{user.username}</small>
+          </span>
+        </button>
+        <button
+          className="icon-button"
+          aria-label={`Message @${user.username}`}
+          disabled={relay.busy}
+          onClick={() => (dm ? navigateDM(dm.id) : void startDM(user))}
+        >
+          <MessageCircle size={17} />
+        </button>
+      </div>
     );
   }
 
@@ -417,15 +480,18 @@ export function RelayApp({ mode }: { mode: Mode }) {
               <button
                 className="friends-link"
                 onClick={() => {
-                  setMembersOpen(true);
-                  notify("Choose a community member below to start a conversation.");
+                  setPeopleOpen(true);
+                  setSidebarOpen(false);
                 }}
               >
-                <Users size={19} /> Your people <span>{state.users.length - 1}</span>
+                <Users size={19} /> Your people{" "}
+                <span aria-label="Pending requests">
+                  {state.incoming.length + state.outgoing.length}
+                </span>
               </button>
               <div className="channel-group">
                 <div className="group-heading">
-                  <span>DIRECT MESSAGES</span>
+                  <span>FRIENDS</span>
                   <button
                     className="icon-button"
                     aria-label="New direct message"
@@ -434,22 +500,10 @@ export function RelayApp({ mode }: { mode: Mode }) {
                     <Plus size={15} />
                   </button>
                 </div>
-                {dms.map((dm) => {
-                  const person = state.users.find(
-                    (u) => dm.participantIds.includes(u.id) && u.id !== state.me.id,
-                  );
-                  return (
-                    <button
-                      className={`dm-item ${room?.id === dm.id ? "selected" : ""}`}
-                      key={dm.id}
-                      onClick={() => navigateRoom(dm)}
-                    >
-                      {person ? <Avatar user={person} size="small" /> : <MessageCircle size={23} />}
-                      <span>{dm.name}</span>
-                    </button>
-                  );
-                })}
-                {!dms.length && (
+                {state.users
+                  .filter((user) => state.friends.some((friend) => friend.userId === user.id))
+                  .map(renderDMPerson)}
+                {!state.friends.length && (
                   <p className="sidebar-small">
                     Good conversations start with a hello. Choose a person below.
                   </p>
@@ -460,18 +514,14 @@ export function RelayApp({ mode }: { mode: Mode }) {
                   <span>COMMUNITY PEOPLE</span>
                 </div>
                 {state.users
-                  .filter((u) => u.id !== state.me.id)
-                  .map((user) => (
-                    <button
-                      className="dm-item"
-                      key={user.id}
-                      onClick={() => void startDM(user)}
-                      disabled={relay.busy}
-                    >
-                      <Avatar user={user} size="small" />
-                      <span>{user.name}</span>
-                    </button>
-                  ))}
+                  .filter(
+                    (user) =>
+                      user.id !== state.me.id &&
+                      !state.friends.some((friend) => friend.userId === user.id) &&
+                      !state.blocked.some((person) => person.userId === user.id) &&
+                      state.servers.some((community) => community.memberIds.includes(user.id)),
+                  )
+                  .map(renderDMPerson)}
               </div>
             </>
           )}
@@ -521,7 +571,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
             ) : (
               <Hash size={23} />
             )}
-            <h2>{room?.name ?? "Your space"}</h2>
+            <h2>{peopleOpen && !server ? "Your people" : (room?.name ?? "Your space")}</h2>
             <span className="topic-divider" />
             <p>{room?.topic ?? "A little space for big ideas"}</p>
           </div>
@@ -605,7 +655,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
             )}
             <VoiceSession
               session={voice.session}
-              visible={room?.id === voice.session?.room.id}
+              visible={!peopleOpen && room?.id === voice.session?.room.id}
               onReturn={() => {
                 if (!voice.session) return;
                 navigateServer(voice.session.room.serverId);
@@ -615,7 +665,16 @@ export function RelayApp({ mode }: { mode: Mode }) {
               onEnded={voice.ended}
               onError={notify}
             />
-            {room ? (
+            {peopleOpen && !server ? (
+              <PeopleScreen
+                state={state}
+                busy={relay.busy}
+                dispatch={relay.dispatch}
+                onProfile={(user) => setModal({ kind: "profile", user })}
+                onMessage={(user) => void startDM(user)}
+                notify={notify}
+              />
+            ) : room ? (
               room.kind === "voice" ? (
                 voice.session?.room.id !== room.id && (
                   <VoiceRoom
@@ -640,7 +699,7 @@ export function RelayApp({ mode }: { mode: Mode }) {
                     onReact={(message) => setModal({ kind: "react", message })}
                     onEdit={(message) => setModal({ kind: "edit", message })}
                     onDelete={(message) => setModal({ kind: "delete", message })}
-                    onReply={(user) => setReply(user.name)}
+                    onReply={(user) => setReply(user.username)}
                     onSave={(message) => {
                       setSaved((previous) =>
                         previous.includes(message.id)

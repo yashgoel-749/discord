@@ -1549,6 +1549,175 @@ svg {
 .voice-conference {
   height: 100%;
 }
+.public-username {
+  display: block;
+  color: #9ba8a0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.message-mention {
+  color: #b9f283;
+  background: #b9f28318;
+  border-radius: 4px;
+  padding: 0 3px;
+  font: inherit;
+}
+.message-mention:hover {
+  text-decoration: underline;
+}
+.people-screen {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+.dm-person-row {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+.dm-person-row.selected {
+  background: #344437;
+}
+.dm-person-row .dm-item {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.dm-person-row .dm-item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dm-person-row > .icon-button {
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.people-screen ul {
+  list-style: none;
+  margin: 12px 0 28px;
+  padding: 0;
+}
+.people-screen h3 {
+  color: #a9b5ae;
+  font-size: 13px;
+  margin: 20px 0 12px;
+}
+.people-screen p {
+  color: #a9b5ae;
+  font-size: 13px;
+}
+.people-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid #303a33;
+  padding-bottom: 14px;
+}
+.people-tabs button {
+  padding: 8px 12px;
+  border-radius: 7px;
+  color: #a9b5ae;
+}
+.people-tabs button[aria-selected="true"] {
+  background: #b9f283;
+  color: #18221b;
+}
+.friend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px;
+  border-bottom: 1px solid #303a33;
+}
+.friend-person {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  min-width: 0;
+}
+.friend-person span {
+  min-width: 0;
+}
+.friend-person strong {
+  color: #e3e9e5;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.friend-person small {
+  display: block;
+  color: #9ba8a0;
+  font-size: 11px;
+}
+.friend-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.friend-actions .secondary-button {
+  width: auto;
+  min-height: 32px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.friend-menu {
+  position: relative;
+}
+.friend-menu summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px;
+}
+.friend-menu summary::-webkit-details-marker {
+  display: none;
+}
+.friend-menu > div {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  top: 100%;
+  width: 160px;
+  padding: 6px;
+  background: #202a23;
+  border: 1px solid #3a493e;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0006;
+}
+.friend-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  font-size: 12px;
+}
+.friend-menu button:hover {
+  background: #344437;
+}
+.add-friend-form {
+  max-width: 480px;
+  margin-top: 24px;
+}
+.profile-relationship {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+@media (max-width: 600px) {
+  .people-screen {
+    padding: 16px;
+  }
+  .friend-row {
+    flex-wrap: wrap;
+  }
+  .friend-actions {
+    margin-left: auto;
+  }
+}
 .voice-member-count {
   margin-left: auto;
   font-size: 10px;

@@ -1,10 +1,66 @@
-import { type AppState, type Command, commandSchema } from "./model";
+import { z } from "zod";
+import {
+  type AppState,
+  type Command,
+  commandSchema,
+  usernameChangeAllowedAt,
+  usernameSchema,
+  userSchema,
+  stateSchema,
+} from "./model";
+import { transitionFriendship } from "./friendships";
 
 const timestamp = (minutes: number) => new Date(Date.now() - minutes * 60000).toISOString();
+export function restoreDemo(value: unknown): AppState {
+  const legacyUser = userSchema.extend({ username: usernameSchema.optional() });
+  const legacy = stateSchema
+    .extend({
+      me: legacyUser.extend({
+        email: z.string().email(),
+        usernameChangedAt: z.string().nullable().default(null),
+        friendRequestPrivacy: stateSchema.shape.me.shape.friendRequestPrivacy.default("everyone"),
+      }),
+      users: z.array(legacyUser),
+      friends: stateSchema.shape.friends.default([]),
+      incoming: stateSchema.shape.incoming.default([]),
+      outgoing: stateSchema.shape.outgoing.default([]),
+      blocked: stateSchema.shape.blocked.default([]),
+    })
+    .parse(value);
+  const names = new Map<string, string>();
+  const used = new Set<string>();
+  for (const user of [legacy.me, ...legacy.users]) {
+    if (names.has(user.id)) continue;
+    const raw =
+      user.username ??
+      user.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ".")
+        .replace(/^\.+|\.+$/g, "")
+        .slice(0, 20)
+        .replace(/\.+$/g, "");
+    const base = usernameSchema.safeParse(raw).success ? raw : "member";
+    let candidate = base;
+    let suffix = 0;
+    while (used.has(candidate))
+      candidate = `${base.slice(0, 16).replace(/[._]+$/g, "")}${++suffix}`;
+    candidate = usernameSchema.parse(candidate);
+    names.set(user.id, candidate);
+    used.add(candidate);
+  }
+  return stateSchema.parse({
+    ...legacy,
+    me: { ...legacy.me, username: names.get(legacy.me.id) },
+    users: legacy.users.map((user) => ({ ...user, username: names.get(user.id) })),
+  });
+}
 export function createDemo(): AppState {
   const me = {
     id: "you",
     name: "Alex Morgan",
+    username: "alex.morgan",
+    usernameChangedAt: null,
+    friendRequestPrivacy: "everyone",
     email: "alex@example.com",
     color: "#a78bfa",
     status: "online",
@@ -12,11 +68,16 @@ export function createDemo(): AppState {
   } satisfies AppState["me"];
   return {
     me,
+    friends: [{ id: "friend-mia", userId: "mia", createdAt: timestamp(100) }],
+    incoming: [],
+    outgoing: [],
+    blocked: [],
     users: [
       me,
       {
         id: "mia",
         name: "Mia Chen",
+        username: "mia.chen",
         color: "#f4b8a4",
         status: "online",
         bio: "Designing a little bit of everything ✨",
@@ -24,6 +85,7 @@ export function createDemo(): AppState {
       {
         id: "james",
         name: "James Wilson",
+        username: "james.wilson",
         color: "#8db8e9",
         status: "online",
         bio: "Code, coffee, repeat.",
@@ -31,6 +93,7 @@ export function createDemo(): AppState {
       {
         id: "sarah",
         name: "Sarah Park",
+        username: "sarah.park",
         color: "#b8c993",
         status: "idle",
         bio: "Currently looking for inspiration.",
@@ -38,6 +101,7 @@ export function createDemo(): AppState {
       {
         id: "leo",
         name: "Leo Martinez",
+        username: "leo.martinez",
         color: "#d7a3dd",
         status: "dnd",
         bio: "Building the next thing.",
@@ -45,6 +109,7 @@ export function createDemo(): AppState {
       {
         id: "nora",
         name: "Nora Taylor",
+        username: "nora.taylor",
         color: "#f3cb86",
         status: "offline",
         bio: "A little curious about everything.",
@@ -265,9 +330,77 @@ export function applyDemoCommand(state: AppState, input: Command): AppState {
   const requireRoom = (id: string) => {
     const room = next.rooms.find((r) => r.id === id);
     if (!room) throw new Error("Channel not found");
+    if (room.kind === "dm") {
+      const peerId = room.participantIds.find((userId) => userId !== next.me.id);
+      if (next.blocked.some((person) => person.userId === peerId))
+        throw new Error("You cannot contact this person");
+      if (
+        !next.friends.some((person) => person.userId === peerId) &&
+        !next.servers.some(
+          (server) =>
+            server.memberIds.includes(next.me.id) && peerId && server.memberIds.includes(peerId),
+        )
+      )
+        throw new Error("You must be friends or share a community to send a message");
+    }
     return room;
   };
   switch (command.type) {
+    case "friendRequest":
+    case "friendAccept":
+    case "friendDecline":
+    case "friendCancel":
+    case "friendRemove":
+    case "block":
+    case "unblock": {
+      const peer =
+        command.type === "friendRequest"
+          ? next.users.find((user) => user.username === command.username)
+          : next.users.find((user) => user.id === command.userId);
+      if (!peer) throw new Error("No one with that username");
+      const existing = [...next.friends, ...next.incoming, ...next.outgoing, ...next.blocked].find(
+        (item) => item.userId === peer.id,
+      );
+      const incoming = next.incoming.some((item) => item.userId === peer.id);
+      const current = existing
+        ? ({
+            requesterId: incoming ? peer.id : next.me.id,
+            addresseeId: incoming ? next.me.id : peer.id,
+            status: next.blocked.includes(existing)
+              ? "blocked"
+              : next.friends.includes(existing)
+                ? "accepted"
+                : "pending",
+            blockedBy: next.blocked.includes(existing) ? [next.me.id] : [],
+          } satisfies import("./model").Friendship)
+        : null;
+      const changed = transitionFriendship({
+        actorId: next.me.id,
+        peerId: peer.id,
+        current,
+        action: command.type,
+      });
+      const keys: ("friends" | "incoming" | "outgoing" | "blocked")[] = [
+        "friends",
+        "incoming",
+        "outgoing",
+        "blocked",
+      ];
+      for (const key of keys) next[key] = next[key].filter((item) => item.userId !== peer.id);
+      if (changed) {
+        const row = existing ?? {
+          id: crypto.randomUUID(),
+          userId: peer.id,
+          createdAt: new Date().toISOString(),
+        };
+        if (changed.status === "accepted") next.friends.push(row);
+        else if (changed.status === "blocked") {
+          next.blocked.push(row);
+        } else if (changed.requesterId === next.me.id) next.outgoing.push(row);
+        else next.incoming.push(row);
+      }
+      break;
+    }
     case "send": {
       if (requireRoom(command.roomId).kind === "voice")
         throw new Error("Use a text channel for messages");
@@ -353,6 +486,15 @@ export function applyDemoCommand(state: AppState, input: Command): AppState {
     case "dm": {
       const user = next.users.find((u) => u.id === command.userId && u.id !== next.me.id);
       if (!user) throw new Error("Choose another member");
+      if (next.blocked.some((person) => person.userId === user.id))
+        throw new Error("You cannot contact this person");
+      if (
+        !next.friends.some((person) => person.userId === user.id) &&
+        !next.servers.some(
+          (server) => server.memberIds.includes(next.me.id) && server.memberIds.includes(user.id),
+        )
+      )
+        throw new Error("You must be friends or share a community to start a conversation");
       if (!next.rooms.some((r) => r.kind === "dm" && r.participantIds.includes(user.id)))
         next.rooms.push({
           id: crypto.randomUUID(),
@@ -365,7 +507,17 @@ export function applyDemoCommand(state: AppState, input: Command): AppState {
       break;
     }
     case "profile": {
+      if (command.username && command.username !== next.me.username) {
+        const allowedAt = usernameChangeAllowedAt(next.me.usernameChangedAt);
+        if (allowedAt && Date.now() < new Date(allowedAt).getTime())
+          throw new Error("You can change your username once every 14 days");
+        if (next.users.some((u) => u.id !== next.me.id && u.username === command.username))
+          throw new Error("That username is already taken");
+        next.me.username = command.username;
+        next.me.usernameChangedAt = new Date().toISOString();
+      }
       next.me = { ...next.me, name: command.name, bio: command.bio, status: command.status };
+      if (command.friendRequestPrivacy) next.me.friendRequestPrivacy = command.friendRequestPrivacy;
       next.users = next.users.map((u) => (u.id === next.me.id ? next.me : u));
       break;
     }

@@ -18,6 +18,8 @@ await dispatch({ type: "react", messageId, emoji: "❤️" });
 
 - `src/lib/model.ts`: Zod domain and command contracts; inferred TypeScript types.
 - `src/lib/demo.ts`: seed and pure local command reducer.
+- `src/lib/friendships.ts`: shared friendship state transitions.
+- `src/lib/request-order.ts`: request ordering for stale-read rejection.
 - `src/components/use-relay.ts`: one browser snapshot owner, serialized mutations, local persistence, connected polling.
 - `src/components/relay-app.tsx`: presentation, selection, dialogs, drafts; never a second transcript owner.
 - `src/server/auth.ts`: Better Auth sessions/credentials in Neon.
@@ -25,7 +27,13 @@ await dispatch({ type: "react", messageId, emoji: "❤️" });
 - `src/app/api`: HTTP boundary validation, origin checks, authenticated identity.
 - `src/components/voice-room.tsx`: LiveKit media lifecycle; server grants scoped voice admission.
 
-All reads/writes are membership-scoped, identity comes from the session, secrets stay server-side, and text is never rendered as HTML. DMs require shared-community membership to start. Only owners create channels. Authorization for mutations is encoded inside SQL predicates.
+Reads and writes are scoped to the current user's communities, conversations, and relationships. Identity comes from the session, secrets stay server-side, and text is never rendered as HTML. DMs require friendship or shared-community membership, with neither person blocking the other. Only owners create channels. SQL predicates enforce conversation access.
+
+`db/002_usernames_friends.sql` backfills public usernames, enforces case-insensitive uniqueness, and stores request privacy and unordered friendship pairs. Each pair records both users' independent blocks. Friendship changes, DM creation, and DM sending use transactions with ordered user-row locks. Hourly friend-request counts share `command_limits` with the existing command limiter.
+
+Signup validates usernames through the shared Zod schema. Better Auth rejects direct username updates. Relay settings enforces availability and the 14-day change limit. Snapshots expose public handles but keep emails, request privacy, and relationship lists viewer-scoped.
+
+PGlite socket checks use one application connection and a test-only correction for the extra ReadyForQuery emitted after failed Execute messages in PGlite 0.4.6. A protocol regression test covers that correction. Production uses PostgreSQL's normal protocol and defaults to five pool connections.
 
 ## Synthesis decision
 

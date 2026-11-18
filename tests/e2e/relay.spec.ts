@@ -58,6 +58,7 @@ test("create a community and channel, and open a private conversation", async ({
     .getByRole("complementary", { name: "Channels" })
     .getByRole("button", { name: /James Wilson/ })
     .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Message", exact: true }).click();
   await expect(page.getByRole("heading", { name: "James Wilson", exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Message", exact: true }).fill("Private hello");
   await page.getByRole("button", { name: "Send message" }).click();

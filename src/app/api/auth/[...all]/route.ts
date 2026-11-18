@@ -1,6 +1,7 @@
 import { auth } from "@/server/auth";
-import { checkOrigin, failure, readBody } from "@/server/http";
+import { checkOrigin, failure, readBody, HttpError } from "@/server/http";
 import { authSchema, displayNameSchema } from "@/lib/model";
+import { usernameAvailable } from "@/server/chat";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -14,17 +15,40 @@ async function handler(request: Request) {
     let forwarded = request;
     if (request.method === "POST") {
       checkOrigin(request);
-      const body = await readBody(request);
+      let body = await readBody(request);
       const path = new URL(request.url).pathname;
       if (path.endsWith("/sign-up/email") || path.endsWith("/sign-in/email")) {
         const fields = z
-          .object({ email: z.string(), password: z.string(), name: z.string().optional() })
+          .object({
+            email: z.string(),
+            password: z.string(),
+            name: z.string().optional(),
+            username: z.string().optional(),
+          })
           .parse(body);
-        authSchema.parse({
+        const input = authSchema.parse({
           ...fields,
           action: path.endsWith("/sign-up/email") ? "register" : "login",
         });
+        if (
+          input.action === "register" &&
+          input.username &&
+          !(await usernameAvailable(input.username))
+        )
+          throw new HttpError(409, "That username is already taken");
+        body = {
+          email: input.email,
+          password: input.password,
+          ...(input.action === "register" ? { name: input.name, username: input.username } : {}),
+        };
       }
+      if (
+        !path.endsWith("/sign-up/email") &&
+        typeof body === "object" &&
+        body !== null &&
+        "username" in body
+      )
+        throw new HttpError(400, "Change your username in Settings");
       if (path.endsWith("/update-user"))
         z.object({ name: displayNameSchema.optional() }).parse(body);
       const headers = new Headers(request.headers);

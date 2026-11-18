@@ -23,12 +23,17 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => Promise<void> }) 
         email: form.get("email"),
         password: form.get("password"),
         ...(register ? { name: form.get("name") } : {}),
+        ...(register ? { username: form.get("username") } : {}),
       });
       const result = register
-        ? await authClient.signUp.email({
-            email: input.email,
-            password: input.password,
-            name: input.name ?? "",
+        ? await authClient.$fetch("/sign-up/email", {
+            method: "POST",
+            body: {
+              email: input.email,
+              password: input.password,
+              name: input.name ?? "",
+              username: input.username,
+            },
           })
         : await authClient.signIn.email({ email: input.email, password: input.password });
       if (result.error) throw new Error(result.error.message ?? "Unable to sign in");
@@ -79,6 +84,20 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => Promise<void> }) 
             : "Your communities are waiting for you."}
         </p>
         <form onSubmit={submit}>
+          {register && (
+            <label>
+              Username
+              <input
+                name="username"
+                autoComplete="username"
+                minLength={3}
+                maxLength={20}
+                required
+                placeholder="your.public.name"
+              />
+              <small>Public and unique. Letters, numbers, dots, and underscores.</small>
+            </label>
+          )}
           {register && (
             <label>
               Display name

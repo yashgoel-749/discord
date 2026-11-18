@@ -11,6 +11,7 @@ import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { RoomServiceClient } from "livekit-server-sdk";
 import { stateSchema, type Command } from "../src/lib/model";
 import { voicePresenceSchema } from "../src/lib/voice-presence";
+import { prepareSocketProtocol } from "./pglite-protocol";
 
 nextEnv.loadEnvConfig(process.cwd());
 const { LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET } = process.env;
@@ -25,6 +26,8 @@ await service.listRooms();
 const origin = "http://localhost:3101";
 const db = await PGlite.create();
 await db.exec(await readFile(resolve("db/001_initial.sql"), "utf8"));
+await db.exec(await readFile(resolve("db/002_usernames_friends.sql"), "utf8"));
+prepareSocketProtocol(db);
 const socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 54330, maxConnections: 10 });
 await socket.start();
 const server = spawn(
@@ -34,6 +37,7 @@ const server = spawn(
     env: {
       ...process.env,
       DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:54330/postgres",
+      DATABASE_POOL_SIZE: "1",
       APP_URL: origin,
       BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
       LIVEKIT_URL,
@@ -73,6 +77,7 @@ async function register(context: BrowserContext, name: string) {
     headers: { Origin: origin },
     data: {
       name,
+      username: `voice${randomUUID().replaceAll("-", "").slice(0, 12)}`,
       email: `voice-${randomUUID()}@example.com`,
       password: randomBytes(24).toString("hex"),
     },
@@ -256,7 +261,7 @@ try {
   await a.getByRole("button", { name: "Direct messages", exact: true }).click();
   await a
     .getByRole("complementary", { name: "Channels", exact: true })
-    .getByRole("button", { name: /Voice Bob/ })
+    .getByRole("button", { name: `Message @${bobUser.username}`, exact: true })
     .first()
     .click();
   await expect(a.getByRole("heading", { name: "Voice Bob", exact: true })).toBeVisible();

@@ -1,13 +1,46 @@
 import { z } from "zod";
 
 export const displayNameSchema = z.string().trim().min(2).max(48);
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, "Use at least 3 characters")
+  .max(20, "Use no more than 20 characters")
+  .regex(/^[a-z0-9_.]+$/, "Use only letters, numbers, underscores, and dots")
+  .regex(/^[a-z0-9].*[a-z0-9]$/, "Start and end with a letter or number")
+  .refine((value) => !value.includes(".."), "Two consecutive dots are not allowed")
+  .refine(
+    (value) => !["admin", "relay", "support", "system", "everyone", "here"].includes(value),
+    "That username is reserved",
+  );
+export const usernameChangeAllowedAt = (changedAt: string | null) =>
+  changedAt ? new Date(new Date(changedAt).getTime() + 14 * 86400000).toISOString() : null;
+export const usernameAvailabilitySchema = z.object({
+  username: usernameSchema,
+  available: z.boolean(),
+});
 export const userSchema = z.object({
   id: z.string(),
   name: displayNameSchema,
+  username: usernameSchema,
   color: z.string(),
   status: z.enum(["online", "idle", "dnd", "offline"]),
   bio: z.string(),
 });
+export const friendPrivacySchema = z.enum(["everyone", "communities", "no_one"]);
+export const relationshipSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  createdAt: z.string(),
+});
+export const friendshipSchema = z.object({
+  requesterId: z.string(),
+  addresseeId: z.string(),
+  status: z.enum(["pending", "accepted", "blocked"]),
+  blockedBy: z.array(z.string()),
+});
+export type Friendship = z.infer<typeof friendshipSchema>;
 export const serverSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -36,11 +69,19 @@ export const messageSchema = z.object({
   reactions: z.array(z.object({ emoji: z.string(), userIds: z.array(z.string()) })),
 });
 export const stateSchema = z.object({
-  me: userSchema.extend({ email: z.string().email() }),
+  me: userSchema.extend({
+    email: z.string().email(),
+    usernameChangedAt: z.string().nullable(),
+    friendRequestPrivacy: friendPrivacySchema,
+  }),
   users: z.array(userSchema),
   servers: z.array(serverSchema),
   rooms: z.array(roomSchema),
   messages: z.array(messageSchema),
+  friends: z.array(relationshipSchema),
+  incoming: z.array(relationshipSchema),
+  outgoing: z.array(relationshipSchema),
+  blocked: z.array(relationshipSchema),
 });
 export type User = z.infer<typeof userSchema>;
 export type Server = z.infer<typeof serverSchema>;
@@ -50,6 +91,25 @@ export type AppState = z.infer<typeof stateSchema>;
 
 const name = displayNameSchema;
 export const commandSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("friendRequest"),
+    username: z
+      .string()
+      .trim()
+      .transform((value) => (value.startsWith("@") ? value.slice(1) : value))
+      .pipe(usernameSchema),
+  }),
+  z.object({
+    type: z.enum([
+      "friendAccept",
+      "friendDecline",
+      "friendCancel",
+      "friendRemove",
+      "block",
+      "unblock",
+    ]),
+    userId: z.string().min(1),
+  }),
   z.object({
     type: z.literal("send"),
     roomId: z.string().min(1),
@@ -83,6 +143,8 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("profile"),
     name,
+    username: usernameSchema.optional(),
+    friendRequestPrivacy: friendPrivacySchema.optional(),
     bio: z.string().trim().max(200),
     status: userSchema.shape.status,
   }),
@@ -100,8 +162,11 @@ export const authSchema = z
       .transform((v) => v.toLowerCase()),
     password: z.string().min(10).max(128),
     name: name.optional(),
+    username: usernameSchema.optional(),
   })
   .superRefine((v, ctx) => {
     if (v.action === "register" && !v.name)
       ctx.addIssue({ code: "custom", message: "Display name is required", path: ["name"] });
+    if (v.action === "register" && !v.username)
+      ctx.addIssue({ code: "custom", message: "Username is required", path: ["username"] });
   });
