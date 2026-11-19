@@ -236,6 +236,61 @@ try {
   await expect.poll(() => receivedAudio(a), pollOptions).toBeGreaterThan(0);
   await expect.poll(() => receivedAudio(b), pollOptions).toBeGreaterThan(0);
 
+  const callBar = a.getByRole("region", { name: "Active voice call" });
+  const voiceToolbar = a.locator(".lk-control-bar");
+  const remoteVolumes = () =>
+    a
+      .locator("audio")
+      .evaluateAll((elements) =>
+        elements
+          .filter((element): element is HTMLAudioElement => element instanceof HTMLAudioElement)
+          .map((element) => element.volume),
+      );
+  await callBar.getByRole("button", { name: "Deafen", exact: true }).click();
+  await expect(voiceToolbar.getByRole("button", { name: "Undeafen", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect
+    .poll(async () => {
+      const volumes = await remoteVolumes();
+      return volumes.length > 0 && volumes.every((volume) => volume === 0);
+    }, pollOptions)
+    .toBe(true);
+  await expect(
+    callBar.getByRole("button", { name: "Unmute microphone", exact: true }),
+  ).toBeDisabled();
+  await voiceToolbar.locator('[data-lk-source="microphone"]').click();
+  await expect(
+    callBar.getByRole("button", { name: "Unmute microphone", exact: true }),
+  ).toBeDisabled();
+  await expect
+    .poll(
+      async () =>
+        (await service.getParticipant(livekitRoom, aliceUser.id)).tracks.some(
+          (track) => track.muted,
+        ),
+      pollOptions,
+    )
+    .toBe(true);
+  await voiceToolbar.getByRole("button", { name: "Undeafen", exact: true }).click();
+  await expect(callBar.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
+  await expect
+    .poll(async () => (await remoteVolumes()).every((volume) => volume > 0), pollOptions)
+    .toBe(true);
+  await callBar.getByRole("button", { name: "Mute microphone", exact: true }).click();
+  await voiceToolbar.getByRole("button", { name: "Deafen", exact: true }).click();
+  await a.getByRole("button", { name: "general", exact: true }).click();
+  await expect(callBar.getByRole("button", { name: "Undeafen", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await callBar.getByRole("button", { name: "Undeafen", exact: true }).click();
+  await expect(
+    callBar.getByRole("button", { name: "Unmute microphone", exact: true }),
+  ).toBeEnabled();
+  await callBar.getByRole("button", { name: "Unmute microphone", exact: true }).click();
+
   async function stillConnected() {
     const before = await receivedAudio(a);
     await expect.poll(() => receivedAudio(a), pollOptions).toBeGreaterThan(before);

@@ -1815,6 +1815,19 @@ svg {
 .voice-disconnect {
   color: #f38b8b;
 }
+.voice-deafen[aria-pressed="true"] {
+  color: #f38b8b;
+}
+.voice-call-bar > .icon-button {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+}
+@media (max-width: 760px) {
+  .lk-control-bar .voice-deafen > span {
+    display: none;
+  }
+}
 .has-voice-call .sidebar-scroll {
   padding-bottom: 100px;
 }
