@@ -9,7 +9,7 @@
 - Shared email/password accounts when Neon is configured.
 - Text messages, editing, deletion, and six reaction types.
 - One-to-one direct messages between friends or people who share a community.
-- Profile name, bio, and user-selected availability.
+- Profile name, bio, automatic online/offline presence, and user-selected availability while connected.
 - Unique public usernames, signup validation, settings availability checks, and a 14-day change limit.
 - Profile cards and clickable message mentions by username.
 - Friend requests, mutual auto-accept, request management, removal, and independent blocking.
@@ -27,7 +27,7 @@
 
 Shared chat returns the newest 300 messages across accessible conversations. Older messages remain in the database but are not paginated in this release. Updates use three-second polling, not WebSockets. New reads and mutations invalidate older reads, so delayed responses cannot replace newer state.
 
-Availability is user-selected. It is not a live connection indicator. Demo participants and their availability are sample data.
+Connected users start online when they open Relay with no other live tab or device. Away, Do not disturb, and Invisible are manual choices while connected. Closing the final tab shows the user offline on the next snapshot refresh. Lost close signals or suspended browsers expire after two minutes plus refresh latency. Another live tab or device keeps the selected status. Demo participants and their availability are sample data.
 
 Bookmarks and mute preferences last for the browser session. Mute does not control push notifications because push delivery is not implemented.
 

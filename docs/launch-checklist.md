@@ -13,4 +13,4 @@ This first release is suitable for local evaluation and a controlled pilot. Comp
 9. Review dependency updates and apply a deployment-appropriate content security policy.
 10. Run a security review and load tests before expanding access.
 
-Do not advertise full Discord parity, end-to-end encryption, live presence, instant realtime, or production readiness for this release.
+Do not advertise full Discord parity, end-to-end encryption, instant realtime, or production readiness for this release. Presence uses heartbeats and polling; crash detection can take two minutes plus refresh latency.

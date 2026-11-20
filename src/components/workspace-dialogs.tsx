@@ -412,13 +412,22 @@ export function WorkspaceDialog(props: Props) {
             </label>
             <label>
               Availability
-              <select name="status" defaultValue={state.me.status}>
+              <select
+                name="status"
+                aria-label="Availability"
+                aria-describedby="availability-help"
+                defaultValue={state.me.status}
+              >
                 <option value="online">Online</option>
                 <option value="idle">Away</option>
                 <option value="dnd">Do not disturb</option>
                 <option value="offline">Invisible</option>
               </select>
-              <small>Availability is selected by you, not live connection tracking.</small>
+              <small id="availability-help">
+                {mode === "demo"
+                  ? "Demo availability is selected by you."
+                  : "You start online when you open Relay. Choose your availability while here; closing all tabs shows you offline."}
+              </small>
             </label>
             {errorView}
             {submitButton("Save changes")}

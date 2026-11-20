@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createDemo, applyDemoCommand, restoreDemo } from "@/lib/demo";
 import { type AppState, type Command, stateSchema } from "@/lib/model";
 import { RequestOrder } from "@/lib/request-order";
+import { useTabPresence } from "./use-tab-presence";
 
 export type Mode = "demo" | "connected";
 type View = { phase: "loading" } | { phase: "signedOut" } | { phase: "ready"; state: AppState };
@@ -59,6 +60,8 @@ export function useRelay(mode: Mode) {
       if (readRequest.current === controller) readRequest.current = null;
     }
   }, [accept, mode]);
+
+  useTabPresence(mode === "connected" && view.phase === "ready" ? view.state.me.id : null, refresh);
 
   useEffect(() => {
     if (mode === "demo") {

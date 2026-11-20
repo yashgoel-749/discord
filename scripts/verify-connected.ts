@@ -11,6 +11,7 @@ import { voicePresenceSchema } from "../src/lib/voice-presence";
 import { chromium, expect, type Route } from "@playwright/test";
 import pg from "pg";
 import { prepareSocketProtocol } from "./pglite-protocol";
+import { checkPresence } from "./presence-checks";
 
 const origin = "http://localhost:3100";
 const db = await PGlite.create();
@@ -18,6 +19,8 @@ await db.exec(await readFile(resolve("db/001_initial.sql"), "utf8"));
 await db.exec(await readFile(resolve("db/001_initial.sql"), "utf8"));
 await db.exec(await readFile(resolve("db/002_usernames_friends.sql"), "utf8"));
 await db.exec(await readFile(resolve("db/002_usernames_friends.sql"), "utf8"));
+await db.exec(await readFile(resolve("db/003_presence.sql"), "utf8"));
+await db.exec(await readFile(resolve("db/003_presence.sql"), "utf8"));
 prepareSocketProtocol(db);
 const socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 54329, maxConnections: 10 });
 await socket.start();
@@ -592,12 +595,18 @@ try {
   } finally {
     await browser.close();
   }
+  await checkPresence({
+    origin,
+    user: { id: bob.id, cookie: loginCookie },
+    observerCookie: alice.cookie,
+    testDb,
+  });
   assert.ok(
     !logs.includes("uncaughtException"),
     "The server must not have uncaught protocol errors",
   );
   process.stdout.write(
-    "Connected checks passed: usernames/backfill/uniqueness/cooldown, friendship transitions and privacy, independent blocks, DM authorization, rate limits, browser friend lists/toasts/settings/mentions/stale polling, and existing chat/auth/voice access controls.\n",
+    "Connected checks passed: usernames/backfill/uniqueness/cooldown, friendship transitions and privacy, independent blocks, DM authorization, rate limits, browser friend lists/toasts/settings/mentions/stale polling, automatic presence/multiple tabs/devices/expiry/reordering/manual choices/sign-out, and existing chat/auth/voice access controls.\n",
   );
 } catch (error) {
   process.stderr.write(`Connected check failed. Server diagnostics:\n${logs}\n`);

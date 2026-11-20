@@ -11,12 +11,16 @@ export class HttpError extends Error {
   }
 }
 
-export async function actor(request: Request) {
+export async function actorSession(request: Request) {
   if (!process.env.DATABASE_URL)
     throw new HttpError(503, "Shared chat is not configured. Use the local demo.");
   const session = await auth().api.getSession({ headers: request.headers });
   if (!session) throw new HttpError(401, "Please sign in to continue");
-  return session.user.id;
+  return { userId: session.user.id, sessionId: session.session.id };
+}
+
+export async function actor(request: Request) {
+  return (await actorSession(request)).userId;
 }
 
 export function checkOrigin(request: Request) {

@@ -42,6 +42,8 @@ npm run db:migrate
 
 Neon is the durable database. Better Auth stores accounts and sessions in the same database. Shared messages refresh every three seconds while the tab is visible.
 
+Opening Relay starts your availability as Online if no other tab or device is connected. You can choose Away, Do not disturb, or Invisible in Settings. Opening another tab preserves that choice. Closing the last tab shows you offline, usually within the next three-second refresh. If a browser crashes or cannot send its close signal, presence expires after two minutes plus refresh latency. Suspended tabs can also expire; a heartbeat restores their selected availability when they resume. Demo statuses remain simulated.
+
 Do not commit `.env.local` or paste credentials into chat. Set production secrets in your deployment provider's environment settings.
 
 ## Connect voice, video, and screen sharing
@@ -85,5 +87,7 @@ With valid LiveKit credentials in `.env.local`, run `npm run test:voice` after t
 Use a separate Neon branch for previews. Set each preview's `APP_URL` to its own origin.
 
 When upgrading an existing deployment, coordinate `db/002_usernames_friends.sql` with this release. The migration backfills public usernames and makes `username` required. The previous signup code cannot create users after that migration. Pause registration during the migration and deployment, then reopen it after verifying the new signup flow.
+
+Apply `db/003_presence.sql` before deploying automatic presence. This additive migration creates per-tab presence records and separate presence rate-limit counters. It preserves existing users, messages, and saved availability.
 
 Read [the launch checklist](docs/launch-checklist.md) before opening registration to the public. This is a working first release, not full Discord feature parity.

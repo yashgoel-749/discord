@@ -47,9 +47,21 @@ Two independent design-only candidates compared integrated Next.js and Vite + No
 - Better Auth handles password/session machinery; email verification and recovery delivery remain required before public launch.
 - Initial roles are owner/member; granular permissions and moderation are future stages.
 
+## Automatic availability
+
+`useRelay` calls `useTabPresence(userId, refresh)` for authenticated connected users. The hook sends an open request, heartbeats every 20 seconds, and a best-effort close beacon on `pagehide`. Each document uses a random tab ID. A restored page creates a new ID. Presence acknowledgments do not contain snapshots, so they cannot overwrite chat state or enter the command queue.
+
+`POST /api/presence` validates the shared Zod contract and authenticates both user and session. `recordPresence(actor, command)` owns per-tab records in `db/003_presence.sql`. It uses server timestamps, a 120-second lease, and the user-row lock already used by profile changes. The first live tab sets saved availability to online; additional tabs and heartbeats preserve manual choices. Closed records remain terminal until their session is deleted. Delayed open or heartbeat requests cannot resurrect a closed document. Session deletion cascades its records, and expired sessions never count as live.
+
+`snapshot` keeps `me.status` as the saved setting for profile forms. Public `users[].status` is that setting when any live tab exists, otherwise offline. Existing community, conversation, and friendship access predicates still determine who can see each user. Presence has separate rate-limit counters and does not consume chat commands.
+
+Two design-only candidates compared server-side tab leases with auth-session heartbeats coordinated through browser storage. Both rejected browser leadership because it cannot reliably identify the final tab across suspension, crashes, and multiple devices. Tab leases are the base. The synthesis keeps the existing settings schema instead of adding a duplicate manual-status field. No cross-family judge ran; candidates used the current model. The user approved automatic presence and the additive production migration.
+
+Clean closes appear offline on the next observer poll. Missed close signals expire after the lease deadline. Hidden tabs keep heartbeating, but a browser can suspend them; instantaneous crash detection is not guaranteed. Presence never changes authentication, chat permissions, friendship state, or voice admission.
+
 ## Reconciliation
 
-Implementation expands initial scope to DMs, invites, reactions, editing, profiles, and optional LiveKit video/screen sharing. User authorized autonomous feature choices. Domain commands remain the only mutation interface. Demo is explicitly a local simulation; seeded status is not connected presence. Production presence is user-selected availability, not socket-derived activity.
+Implementation expands initial scope to DMs, invites, reactions, editing, profiles, optional LiveKit video/screen sharing, and automatic presence. User authorized autonomous feature choices. Domain commands remain the chat mutation interface; the authenticated presence endpoint owns only tab lifecycle and the first-open availability reset. Demo is explicitly a local simulation; seeded status is not connected presence.
 
 ## Risks / remaining decisions
 

@@ -16,11 +16,13 @@ import {
 import { transitionFriendship, FriendshipError } from "@/lib/friendships";
 import { database } from "./db";
 import { HttpError } from "./http";
+import { livePresence } from "./presence";
 
 const messagePermission = (peer: string) =>
   `(NOT EXISTS (SELECT 1 FROM friendships f WHERE f.status='blocked' AND ((f.requester_id=$1 AND f.addressee_id=${peer}) OR (f.addressee_id=$1 AND f.requester_id=${peer}))) AND (EXISTS (SELECT 1 FROM friendships f WHERE f.status='accepted' AND ((f.requester_id=$1 AND f.addressee_id=${peer}) OR (f.addressee_id=$1 AND f.requester_id=${peer}))) OR EXISTS (SELECT 1 FROM memberships a JOIN memberships b ON a.server_id=b.server_id WHERE a.user_id=$1 AND b.user_id=${peer})))`;
 const access = `((EXISTS (SELECT 1 FROM memberships mm WHERE mm.server_id=r.server_id AND mm.user_id=$1) OR EXISTS (SELECT 1 FROM participants pp WHERE pp.room_id=r.id AND pp.user_id=$1)) AND (r.kind<>'dm' OR EXISTS (SELECT 1 FROM participants peer WHERE peer.room_id=r.id AND peer.user_id<>$1 AND ${messagePermission("peer.user_id")})))`;
 const userColumns = `u.id, u.name, u.username, u.color, u.status, u.bio`;
+const publicUserColumns = `u.id, u.name, u.username, u.color, CASE WHEN ${livePresence} THEN u.status ELSE 'offline' END AS status, u.bio`;
 
 export async function usernameAvailable(username: string, userId?: string) {
   const result = await database().query(
@@ -39,7 +41,7 @@ export async function snapshot(userId: string): Promise<AppState> {
         [userId],
       ),
       db.query(
-        `SELECT DISTINCT ${userColumns} FROM "user" u WHERE u.id=$1 OR EXISTS (SELECT 1 FROM memberships a JOIN memberships b ON a.server_id=b.server_id WHERE a.user_id=$1 AND b.user_id=u.id) OR EXISTS (SELECT 1 FROM participants a JOIN participants b ON a.room_id=b.room_id WHERE a.user_id=$1 AND b.user_id=u.id) OR EXISTS (SELECT 1 FROM friendships f WHERE (f.requester_id=$1 AND f.addressee_id=u.id) OR (f.addressee_id=$1 AND f.requester_id=u.id))`,
+        `SELECT DISTINCT ${publicUserColumns} FROM "user" u WHERE u.id=$1 OR EXISTS (SELECT 1 FROM memberships a JOIN memberships b ON a.server_id=b.server_id WHERE a.user_id=$1 AND b.user_id=u.id) OR EXISTS (SELECT 1 FROM participants a JOIN participants b ON a.room_id=b.room_id WHERE a.user_id=$1 AND b.user_id=u.id) OR EXISTS (SELECT 1 FROM friendships f WHERE (f.requester_id=$1 AND f.addressee_id=u.id) OR (f.addressee_id=$1 AND f.requester_id=u.id))`,
         [userId],
       ),
       db.query(

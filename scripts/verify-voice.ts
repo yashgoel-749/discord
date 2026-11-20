@@ -27,6 +27,7 @@ const origin = "http://localhost:3101";
 const db = await PGlite.create();
 await db.exec(await readFile(resolve("db/001_initial.sql"), "utf8"));
 await db.exec(await readFile(resolve("db/002_usernames_friends.sql"), "utf8"));
+await db.exec(await readFile(resolve("db/003_presence.sql"), "utf8"));
 prepareSocketProtocol(db);
 const socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 54330, maxConnections: 10 });
 await socket.start();
